@@ -12,56 +12,81 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccountStore } from "@/stores/account";
+import type { Account } from "@/types";
 
-defineProps<{
-  addAccount?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    addAccount?: boolean;
+    currentId: number;
+    account: Account;
+    actionAdd: boolean;
+  }>(),
+  {
+    addAccount: false,
+  }
+);
 
 const emit = defineEmits<{
   (e: "update:addAccount", val: boolean): void;
+  (e: "update:currentId", val: number): void;
+  (e: "update:account", val: typeof props.account): void;
+  (e: "account-deleted", val: number): void;
+  (e: "account-updated", val: typeof props.account): void;
 }>();
 
-const store = useAccountStore();
 const MAX = 50;
 const loginInvalid = ref(false);
 const pwdInvalid = ref(false);
 
 watch(
-  () => store.login,
+  () => props.account.login,
   (v) => {
     if (v && String(v).trim() !== "") loginInvalid.value = false;
   }
 );
 
 watch(
-  () => store.password,
+  () => props.account.password,
   (v) => {
     if (v && String(v).trim() !== "") pwdInvalid.value = false;
   }
 );
 
 const validateAndSubmit = () => {
-  if (!store.login || String(store.login).trim() === "") {
+  console.log("validateAndSubmit", props.account);
+  if (!props.account.login || String(props.account.login).trim() === "") {
     loginInvalid.value = true;
   } else {
     loginInvalid.value = false;
   }
 
   if (
-    (!store.password || String(store.password).trim() === "") &&
-    store.type !== "ldap"
+    (!props.account.password || String(props.account.password).trim() === "") &&
+    props.account.type !== "ldap"
   ) {
     pwdInvalid.value = true;
   } else {
     pwdInvalid.value = false;
   }
 
-  console.log(store.$state);
+  if (!props.account.login || String(props.account.login).trim() === "") return;
+
+  if (
+    (!props.account.password || String(props.account.password).trim() === "") &&
+    props.account.type !== "ldap"
+  )
+    return;
+
+  if (props.actionAdd) {
+    emit("update:account", props.account);
+  } else {
+    const updatedAccount = { ...props.account };
+    emit("account-updated", updatedAccount);
+  }
 };
 
 const labelsText = computed({
-  get: () => store.labels.map((l) => l.text).join(";"),
+  get: () => props.account.labels.map((l) => l.text).join(";"),
   set: (val: string) => {
     const safe = val.slice(0, MAX);
     const parts = safe
@@ -70,19 +95,22 @@ const labelsText = computed({
       .filter(Boolean);
 
     if (parts.length === 0) {
-      store.labels = [];
+      props.account.labels = [];
       return;
     }
 
-    store.labels = parts.map((text) => ({ text }));
+    props.account.labels = parts.map((text) => ({ text }));
   },
 });
 
-const cancelAddingRecord = () => {
-  loginInvalid.value = false;
-  pwdInvalid.value = false;
-  store.$reset();
-  emit("update:addAccount", false);
+const deleteRecord = () => {
+  if (props.actionAdd) {
+    loginInvalid.value = false;
+    pwdInvalid.value = false;
+    emit("update:addAccount", false);
+  } else {
+    emit("account-deleted", props.currentId);
+  }
 };
 </script>
 
@@ -90,7 +118,7 @@ const cancelAddingRecord = () => {
   <form
     class="grid items-center gap-2 mb-3"
     :class="
-      store.type !== 'ldap'
+      props.account.type !== 'ldap'
         ? 'grid-cols-[7fr_4fr_7fr_7fr_1fr]'
         : 'grid-cols-[7fr_4fr_14fr_1fr]'
     "
@@ -102,7 +130,7 @@ const cancelAddingRecord = () => {
       @blur="validateAndSubmit"
       maxlength="50"
     />
-    <Select v-model="store.type" @update:modelValue="validateAndSubmit">
+    <Select v-model="props.account.type" @update:modelValue="validateAndSubmit">
       <SelectTrigger class="w-[4fr]">
         <SelectValue />
       </SelectTrigger>
@@ -114,7 +142,7 @@ const cancelAddingRecord = () => {
       </SelectContent>
     </Select>
     <Input
-      v-model="store.login"
+      v-model="props.account.login"
       @blur="validateAndSubmit"
       maxlength="100"
       :class="
@@ -124,8 +152,8 @@ const cancelAddingRecord = () => {
       "
     />
     <PwdInput
-      v-if="store.type !== 'ldap'"
-      v-model="store.password"
+      v-if="props.account.type !== 'ldap'"
+      v-model="props.account.password"
       @blur="validateAndSubmit"
       :class="
         pwdInvalid
@@ -135,7 +163,7 @@ const cancelAddingRecord = () => {
     />
     <Trash2
       class="cursor-pointer w-6 h-6 text-muted-foreground hover:text-foreground"
-      @click="cancelAddingRecord"
+      @click="deleteRecord"
     />
   </form>
 </template>

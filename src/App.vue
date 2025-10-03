@@ -1,10 +1,88 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch, computed } from "vue";
 import { Plus, CircleQuestionMark } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { RecordForm } from "./components/ui/recordForm";
+import { useNewAccountStore } from "@/stores/newAccount";
+import { useAccountsListStore } from "@/stores/accountsList";
+import type { Account } from "@/types";
 
+const newAccountStore = useNewAccountStore();
 const addAccount = ref(false);
+
+const accountsListStore = useAccountsListStore();
+
+const currentId = ref(
+  sessionStorage.getItem("currentId")
+    ? Number(sessionStorage.getItem("currentId"))
+    : 0
+);
+
+const newAccount = computed({
+  get: () => ({
+    id: currentId.value,
+    labels: newAccountStore.labels,
+    type: newAccountStore.type,
+    login: newAccountStore.login,
+    password: newAccountStore.password,
+  }),
+  set: (val: any) => {
+    newAccountStore.id = currentId.value;
+    newAccountStore.labels = val?.labels ?? [];
+    newAccountStore.type = val?.type ?? "";
+    newAccountStore.login = val?.login ?? "";
+    newAccountStore.password = val?.password ?? "";
+  },
+});
+
+watch(addAccount, (val) => {
+  if (!val) {
+    newAccountStore.$reset();
+  }
+});
+
+watch(
+  newAccount,
+  (val) => {
+    if (!addAccount.value) return;
+
+    const stored = sessionStorage.getItem("accounts");
+    const accounts = stored ? JSON.parse(stored) : {};
+    accounts[currentId.value] = val;
+    sessionStorage.setItem("accounts", JSON.stringify(accounts));
+    currentId.value += 1;
+    sessionStorage.setItem("currentId", currentId.value.toString());
+    addAccount.value = false;
+    accountsListStore.accounts = accounts;
+  },
+  { deep: true }
+);
+
+const handleDelete = (id: number) => {
+  const stored = sessionStorage.getItem("accounts");
+
+  if (!stored) return;
+
+  const parsed = JSON.parse(stored);
+  delete parsed[id];
+  sessionStorage.setItem("accounts", JSON.stringify(parsed));
+
+  accountsListStore.accounts = Object.values(parsed);
+};
+
+const handleUpdateAccount = (updatedAccount: Account) => {
+  if (updatedAccount.type === "ldap") {
+    updatedAccount.password = "";
+  }
+
+  const stored = sessionStorage.getItem("accounts");
+  const parsed: Record<string, Account> = stored ? JSON.parse(stored) : {};
+
+  parsed[updatedAccount.id] = updatedAccount;
+  sessionStorage.setItem("accounts", JSON.stringify(parsed));
+
+  accountsListStore.accounts = Object.values(parsed);
+};
 </script>
 
 <template>
@@ -42,6 +120,22 @@ const addAccount = ref(false);
       <p></p>
     </div>
 
-    <RecordForm v-if="addAccount" v-model:addAccount="addAccount" />
+    <RecordForm
+      v-for="account in accountsListStore.accounts"
+      :key="Number(account.id)"
+      :currentId="Number(account.id)"
+      :account="account"
+      :actionAdd="false"
+      @account-deleted="handleDelete"
+      @account-updated="handleUpdateAccount"
+    />
+
+    <RecordForm
+      v-if="addAccount"
+      v-model:addAccount="addAccount"
+      v-model:currentId="currentId"
+      v-model:account="newAccount"
+      :actionAdd="true"
+    />
   </div>
 </template>
