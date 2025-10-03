@@ -5,7 +5,7 @@ export const useAccountStore = defineStore("account", {
     labels: [] as Array<{ text: string }>,
     type: "local" as string,
     login: "" as string,
-    password: "" as string | null,
+    password: "" as string,
   }),
   getters: {},
   actions: {},

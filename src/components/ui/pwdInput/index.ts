@@ -1,1 +1,1 @@
-export { default as PwdInput } from "./pwdInput.vue";
+export { default as PwdInput } from "./PwdInput.vue";
