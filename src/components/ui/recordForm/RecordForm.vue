@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { Trash2 } from "lucide-vue-next";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Account } from "@/types";
+import { ACCOUNT_TYPES } from "@/types";
 
 const props = withDefaults(
   defineProps<{
@@ -26,67 +27,55 @@ const props = withDefaults(
   }
 );
 
+const localAccount = ref<Account>({ ...props.account });
+
 const emit = defineEmits<{
   (e: "update:addAccount", val: boolean): void;
   (e: "update:currentId", val: number): void;
-  (e: "update:account", val: typeof props.account): void;
   (e: "account-deleted", val: number): void;
-  (e: "account-updated", val: typeof props.account): void;
+  (e: "account-updated", val: Account): void;
 }>();
 
 const MAX = 50;
 const loginInvalid = ref(false);
 const pwdInvalid = ref(false);
 
-watch(
-  () => props.account.login,
-  (v) => {
-    if (v && String(v).trim() !== "") loginInvalid.value = false;
-  }
-);
-
-watch(
-  () => props.account.password,
-  (v) => {
-    if (v && String(v).trim() !== "") pwdInvalid.value = false;
-  }
-);
-
-const validateAndSubmit = () => {
-  console.log("validateAndSubmit", props.account);
-  if (!props.account.login || String(props.account.login).trim() === "") {
+const validateData = () => {
+  if (
+    !localAccount.value.login ||
+    String(localAccount.value.login).trim() === ""
+  ) {
     loginInvalid.value = true;
   } else {
     loginInvalid.value = false;
   }
 
   if (
-    (!props.account.password || String(props.account.password).trim() === "") &&
-    props.account.type !== "ldap"
+    (!localAccount.value.password ||
+      String(localAccount.value.password).trim() === "") &&
+    localAccount.value.type !== ACCOUNT_TYPES.ldap
   ) {
     pwdInvalid.value = true;
   } else {
     pwdInvalid.value = false;
   }
 
-  if (!props.account.login || String(props.account.login).trim() === "") return;
+  if (loginInvalid.value || pwdInvalid.value) return false;
 
-  if (
-    (!props.account.password || String(props.account.password).trim() === "") &&
-    props.account.type !== "ldap"
-  )
-    return;
+  return true;
+};
 
-  if (props.actionAdd) {
-    emit("update:account", props.account);
-  } else {
-    const updatedAccount = { ...props.account };
-    emit("account-updated", updatedAccount);
-  }
+const submitData = () => {
+  if (!validateData()) return;
+
+  console.log("validate", localAccount.value);
+
+  emit("account-updated", { ...localAccount.value });
+  emit("update:addAccount", false);
 };
 
 const labelsText = computed({
-  get: () => props.account.labels.map((l) => l.text).join(";"),
+  get: () => localAccount.value.labels.map((l) => l.text).join(";"),
   set: (val: string) => {
     const safe = val.slice(0, MAX);
     const parts = safe
@@ -95,11 +84,11 @@ const labelsText = computed({
       .filter(Boolean);
 
     if (parts.length === 0) {
-      props.account.labels = [];
+      localAccount.value.labels = [];
       return;
     }
 
-    props.account.labels = parts.map((text) => ({ text }));
+    localAccount.value.labels = parts.map((text) => ({ text }));
   },
 });
 
@@ -107,6 +96,10 @@ const deleteRecord = () => {
   if (props.actionAdd) {
     loginInvalid.value = false;
     pwdInvalid.value = false;
+    props.account.labels = [];
+    props.account.login = "";
+    props.account.password = "";
+    props.account.type = ACCOUNT_TYPES.local;
     emit("update:addAccount", false);
   } else {
     emit("account-deleted", props.currentId);
@@ -118,7 +111,7 @@ const deleteRecord = () => {
   <form
     class="grid items-center gap-2 mb-3"
     :class="
-      props.account.type !== 'ldap'
+      localAccount.type !== ACCOUNT_TYPES.ldap
         ? 'grid-cols-[7fr_4fr_7fr_7fr_1fr]'
         : 'grid-cols-[7fr_4fr_14fr_1fr]'
     "
@@ -127,23 +120,23 @@ const deleteRecord = () => {
       ref="textareaRef"
       v-model="labelsText"
       class="resize-none transition-[height] duration-200 ease-in-out"
-      @blur="validateAndSubmit"
+      @blur="submitData"
       maxlength="50"
     />
-    <Select v-model="props.account.type" @update:modelValue="validateAndSubmit">
+    <Select v-model="localAccount.type" @update:modelValue="submitData">
       <SelectTrigger class="w-[4fr]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectItem value="local"> Локальная </SelectItem>
-          <SelectItem value="ldap"> LDAP </SelectItem>
+          <SelectItem :value="ACCOUNT_TYPES.local"> Локальная </SelectItem>
+          <SelectItem :value="ACCOUNT_TYPES.ldap"> LDAP </SelectItem>
         </SelectGroup>
       </SelectContent>
     </Select>
     <Input
-      v-model="props.account.login"
-      @blur="validateAndSubmit"
+      v-model="localAccount.login"
+      @blur="submitData"
       maxlength="100"
       :class="
         loginInvalid
@@ -152,9 +145,9 @@ const deleteRecord = () => {
       "
     />
     <PwdInput
-      v-if="props.account.type !== 'ldap'"
-      v-model="props.account.password"
-      @blur="validateAndSubmit"
+      v-if="localAccount.type !== ACCOUNT_TYPES.ldap"
+      v-model="localAccount.password"
+      @blur="submitData"
       :class="
         pwdInvalid
           ? 'border-[var(--destructive)] ring-2 ring-[var(--destructive)]'

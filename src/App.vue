@@ -1,57 +1,46 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
-import { Plus, CircleQuestionMark } from "lucide-vue-next";
+import { ref, watch } from "vue";
+import { Plus } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
+import { HelpBlock } from "./components/ui/helpBlock";
 import { RecordForm } from "./components/ui/recordForm";
-import { useNewAccountStore } from "@/stores/newAccount";
 import { useAccountsListStore } from "@/stores/accountsList";
 import type { Account } from "@/types";
-
-const newAccountStore = useNewAccountStore();
-const addAccount = ref(false);
+import { ACCOUNT_TYPES, STORAGE_TYPES } from "@/types";
 
 const accountsListStore = useAccountsListStore();
+const addAccount = ref(false);
 
 const currentId = ref(
-  sessionStorage.getItem("currentId")
-    ? Number(sessionStorage.getItem("currentId"))
+  sessionStorage.getItem(STORAGE_TYPES.currentId)
+    ? Number(sessionStorage.getItem(STORAGE_TYPES.currentId))
     : 0
 );
 
-const newAccount = computed({
-  get: () => ({
-    id: currentId.value,
-    labels: newAccountStore.labels,
-    type: newAccountStore.type,
-    login: newAccountStore.login,
-    password: newAccountStore.password,
-  }),
-  set: (val: any) => {
-    newAccountStore.id = currentId.value;
-    newAccountStore.labels = val?.labels ?? [];
-    newAccountStore.type = val?.type ?? "";
-    newAccountStore.login = val?.login ?? "";
-    newAccountStore.password = val?.password ?? "";
-  },
-});
+const newAccount = ref<Account | null>(null);
 
-watch(addAccount, (val) => {
-  if (!val) {
-    newAccountStore.$reset();
-  }
-});
+const startAddAccount = () => {
+  newAccount.value = {
+    id: currentId.value,
+    labels: [],
+    type: ACCOUNT_TYPES.local,
+    login: "",
+    password: "",
+  };
+  addAccount.value = true;
+};
 
 watch(
   newAccount,
   (val) => {
     if (!addAccount.value) return;
 
-    const stored = sessionStorage.getItem("accounts");
+    const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
     const accounts = stored ? JSON.parse(stored) : {};
     accounts[currentId.value] = val;
-    sessionStorage.setItem("accounts", JSON.stringify(accounts));
+    sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(accounts));
     currentId.value += 1;
-    sessionStorage.setItem("currentId", currentId.value.toString());
+    sessionStorage.setItem(STORAGE_TYPES.currentId, currentId.value.toString());
     addAccount.value = false;
     accountsListStore.accounts = accounts;
   },
@@ -59,27 +48,27 @@ watch(
 );
 
 const handleDelete = (id: number) => {
-  const stored = sessionStorage.getItem("accounts");
+  const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
 
   if (!stored) return;
 
   const parsed = JSON.parse(stored);
   delete parsed[id];
-  sessionStorage.setItem("accounts", JSON.stringify(parsed));
+  sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(parsed));
 
   accountsListStore.accounts = Object.values(parsed);
 };
 
 const handleUpdateAccount = (updatedAccount: Account) => {
-  if (updatedAccount.type === "ldap") {
+  if (updatedAccount.type === ACCOUNT_TYPES.ldap) {
     updatedAccount.password = "";
   }
 
-  const stored = sessionStorage.getItem("accounts");
+  const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
   const parsed: Record<string, Account> = stored ? JSON.parse(stored) : {};
 
   parsed[updatedAccount.id] = updatedAccount;
-  sessionStorage.setItem("accounts", JSON.stringify(parsed));
+  sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(parsed));
 
   accountsListStore.accounts = Object.values(parsed);
 };
@@ -96,19 +85,13 @@ const handleUpdateAccount = (updatedAccount: Account) => {
       <Button
         class="cursor-pointer px-6 py-5"
         variant="outline"
-        @click="addAccount = true"
+        @click="startAddAccount"
       >
         <plus class="h-4 w-4" />
       </Button>
     </div>
 
-    <div class="flex bg-card rounded-[var(--radius)] px-2 py-1 mb-4">
-      <CircleQuestionMark stroke-width="1.25px" />
-      <p class="ml-2">
-        Для указания нескольких меток для одной пары логин/пароль используйте
-        разделитель ;
-      </p>
-    </div>
+    <HelpBlock />
 
     <div
       class="grid grid-cols-[7fr_4fr_7fr_7fr_1fr] text-muted-foreground gap-2 mb-3"
@@ -131,11 +114,12 @@ const handleUpdateAccount = (updatedAccount: Account) => {
     />
 
     <RecordForm
-      v-if="addAccount"
+      v-if="addAccount && newAccount"
       v-model:addAccount="addAccount"
-      v-model:currentId="currentId"
-      v-model:account="newAccount"
+      :currentId="currentId"
+      :account="newAccount"
       :actionAdd="true"
+      @account-updated="handleUpdateAccount"
     />
   </div>
 </template>
