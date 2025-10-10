@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { watch } from "vue";
 import type { Account } from "@/types";
 
 export const useAccountsListStore = defineStore("accountsList", {
@@ -24,5 +25,25 @@ export const useAccountsListStore = defineStore("accountsList", {
     return {
       accounts,
     };
+  },
+
+  actions: {
+    addAccount(account: Account) {
+      this.accounts.push(account);
+    },
+
+    initWatch() {
+      watch(
+        () => this.accounts,
+        (newAccounts) => {
+          const record: Record<string, Account> = {};
+          newAccounts.forEach((acc, index) => {
+            record[index] = acc;
+          });
+          sessionStorage.setItem("accounts", JSON.stringify(record));
+        },
+        { deep: true }
+      );
+    },
   },
 });

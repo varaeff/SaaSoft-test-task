@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref } from "vue";
 import { Plus } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { HelpBlock } from "./components/ui/helpBlock";
@@ -9,15 +9,15 @@ import type { Account } from "@/types";
 import { ACCOUNT_TYPES, STORAGE_TYPES } from "@/types";
 
 const accountsListStore = useAccountsListStore();
+accountsListStore.initWatch();
 const addAccount = ref(false);
+const newAccount = ref<Account | null>(null);
 
 const currentId = ref(
   sessionStorage.getItem(STORAGE_TYPES.currentId)
     ? Number(sessionStorage.getItem(STORAGE_TYPES.currentId))
     : 0
 );
-
-const newAccount = ref<Account | null>(null);
 
 const startAddAccount = () => {
   newAccount.value = {
@@ -30,47 +30,38 @@ const startAddAccount = () => {
   addAccount.value = true;
 };
 
-watch(
-  newAccount,
-  (val) => {
-    if (!addAccount.value) return;
-
-    const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
-    const accounts = stored ? JSON.parse(stored) : {};
-    accounts[currentId.value] = val;
-    sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(accounts));
-    currentId.value += 1;
-    sessionStorage.setItem(STORAGE_TYPES.currentId, currentId.value.toString());
-    addAccount.value = false;
-    accountsListStore.accounts = accounts;
-  },
-  { deep: true }
-);
-
 const handleDelete = (id: number) => {
-  const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
+  console.log("Delete account with id:", id);
+  const index = accountsListStore.accounts.findIndex((acc) => acc.id === id);
 
-  if (!stored) return;
+  if (index === -1) return;
 
-  const parsed = JSON.parse(stored);
-  delete parsed[id];
-  sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(parsed));
-
-  accountsListStore.accounts = Object.values(parsed);
+  accountsListStore.accounts.splice(index, 1);
 };
 
-const handleUpdateAccount = (updatedAccount: Account) => {
-  if (updatedAccount.type === ACCOUNT_TYPES.ldap) {
-    updatedAccount.password = "";
+const handleUpdateAccount = (account: Account) => {
+  if (account.type === ACCOUNT_TYPES.ldap) {
+    account.password = "";
   }
 
-  const stored = sessionStorage.getItem(STORAGE_TYPES.accounts);
-  const parsed: Record<string, Account> = stored ? JSON.parse(stored) : {};
+  if (addAccount.value) {
+    accountsListStore.addAccount(account);
+    currentId.value += 1;
+    console.log(currentId.value);
+    sessionStorage.setItem(STORAGE_TYPES.currentId, currentId.value.toString());
+    addAccount.value = false;
+  } else {
+    const index = accountsListStore.accounts.findIndex(
+      (acc) => acc.id === account.id
+    );
 
-  parsed[updatedAccount.id] = updatedAccount;
-  sessionStorage.setItem(STORAGE_TYPES.accounts, JSON.stringify(parsed));
-
-  accountsListStore.accounts = Object.values(parsed);
+    if (index !== -1) {
+      accountsListStore.accounts[index] = {
+        ...accountsListStore.accounts[index],
+        ...account,
+      };
+    }
+  }
 };
 </script>
 
@@ -111,6 +102,7 @@ const handleUpdateAccount = (updatedAccount: Account) => {
       :actionAdd="false"
       @account-deleted="handleDelete"
       @account-updated="handleUpdateAccount"
+      @focus="addAccount = false"
     />
 
     <RecordForm

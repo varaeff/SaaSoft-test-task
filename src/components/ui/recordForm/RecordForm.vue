@@ -34,6 +34,7 @@ const emit = defineEmits<{
   (e: "update:currentId", val: number): void;
   (e: "account-deleted", val: number): void;
   (e: "account-updated", val: Account): void;
+  (e: "focus"): void;
 }>();
 
 const MAX = 50;
@@ -41,18 +42,17 @@ const loginInvalid = ref(false);
 const pwdInvalid = ref(false);
 
 const validateData = () => {
-  if (
-    !localAccount.value.login ||
-    String(localAccount.value.login).trim() === ""
-  ) {
+  localAccount.value.login = localAccount.value.login.trim();
+  localAccount.value.password = localAccount.value.password.trim();
+
+  if (!localAccount.value.login) {
     loginInvalid.value = true;
   } else {
     loginInvalid.value = false;
   }
 
   if (
-    (!localAccount.value.password ||
-      String(localAccount.value.password).trim() === "") &&
+    !localAccount.value.password &&
     localAccount.value.type !== ACCOUNT_TYPES.ldap
   ) {
     pwdInvalid.value = true;
@@ -67,8 +67,6 @@ const validateData = () => {
 
 const submitData = () => {
   if (!validateData()) return;
-
-  console.log("validate", localAccount.value);
 
   emit("account-updated", { ...localAccount.value });
   emit("update:addAccount", false);
@@ -92,6 +90,11 @@ const labelsText = computed({
   },
 });
 
+const onTypeChange = () => {
+  submitData();
+  emit("focus");
+};
+
 const deleteRecord = () => {
   if (props.actionAdd) {
     loginInvalid.value = false;
@@ -104,6 +107,10 @@ const deleteRecord = () => {
   } else {
     emit("account-deleted", props.currentId);
   }
+};
+
+const onFocus = () => {
+  emit("focus");
 };
 </script>
 
@@ -121,9 +128,10 @@ const deleteRecord = () => {
       v-model="labelsText"
       class="resize-none transition-[height] duration-200 ease-in-out"
       @blur="submitData"
+      @focus="onFocus"
       maxlength="50"
     />
-    <Select v-model="localAccount.type" @update:modelValue="submitData">
+    <Select v-model="localAccount.type" @update:modelValue="onTypeChange">
       <SelectTrigger class="w-[4fr]">
         <SelectValue />
       </SelectTrigger>
@@ -137,6 +145,7 @@ const deleteRecord = () => {
     <Input
       v-model="localAccount.login"
       @blur="submitData"
+      @focus="onFocus"
       maxlength="100"
       :class="
         loginInvalid
@@ -148,6 +157,7 @@ const deleteRecord = () => {
       v-if="localAccount.type !== ACCOUNT_TYPES.ldap"
       v-model="localAccount.password"
       @blur="submitData"
+      @focus="onFocus"
       :class="
         pwdInvalid
           ? 'border-[var(--destructive)] ring-2 ring-[var(--destructive)]'
